@@ -88,5 +88,184 @@ CATALOGO = {
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     texto = (
-        f"👋 *Hola {user.first_name}*\n\n"
-        f"🆔 *ID:*
+        "👋 *Hola " + str(user.first_name) + "*\n\n"
+        "🆔 *ID:* `" + str(user.id) + "`\n\n"
+        "🎉 *Bienvenido a GStreaming*\n"
+        "Selecciona una categoría:"
+    )
+    teclado = [
+        [InlineKeyboardButton("🎞️ Streaming y Cuentas", callback_data="cat_streaming")],
+        [InlineKeyboardButton("🎵 Spotify Premium", callback_data="cat_musica")],
+        [InlineKeyboardButton("💻 IA, Programas y VPN", callback_data="cat_herramientas_ia")],
+        [InlineKeyboardButton("🎮 Gaming y Redes Sociales", callback_data="cat_gaming_redes")],
+        [InlineKeyboardButton("💳 Métodos de Pago", callback_data="info_pagos")],
+        [InlineKeyboardButton("❌ Cerrar menú", callback_data="cerrar")],
+    ]
+    markup = InlineKeyboardMarkup(teclado)
+
+    if update.callback_query:
+        await update.callback_query.message.edit_text(
+            texto, reply_markup=markup, parse_mode=ParseMode.MARKDOWN
+        )
+    else:
+        await update.message.reply_text(
+            texto, reply_markup=markup, parse_mode=ParseMode.MARKDOWN
+        )
+
+
+async def mostrar_seccion(update: Update, context: ContextTypes.DEFAULT_TYPE, clave: str):
+    query = update.callback_query
+    await query.answer()
+
+    seccion = CATALOGO.get(clave)
+    if not seccion:
+        return
+
+    texto = "📦 *" + seccion["titulo"].upper() + "*\n\nSelecciona el servicio que deseas solicitar:\n\n"
+    teclado = []
+
+    for item in seccion["productos"]:
+        texto += "• *" + item["nombre"] + "* — `" + item["precio"] + "`\n"
+        teclado.append(
+            [InlineKeyboardButton("🛒 Pedir: " + item["nombre"], callback_data="pedir_" + item["id"])]
+        )
+
+    teclado.append([InlineKeyboardButton("🏠 Volver al inicio", callback_data="inicio")])
+    teclado.append([InlineKeyboardButton("❌ Cerrar menú", callback_data="cerrar")])
+
+    await query.message.edit_text(
+        texto,
+        reply_markup=InlineKeyboardMarkup(teclado),
+        parse_mode=ParseMode.MARKDOWN,
+    )
+
+
+async def procesar_pedido(update: Update, context: ContextTypes.DEFAULT_TYPE, item_id: str):
+    query = update.callback_query
+    user = update.effective_user
+    await query.answer()
+
+    producto = None
+    for sec in CATALOGO.values():
+        for p in sec["productos"]:
+            if p["id"] == item_id:
+                producto = p
+                break
+
+    if not producto:
+        return
+
+    texto_cliente = (
+        "✅ *SOLICITUD GENERADA*\n\n"
+        "📦 *Producto:* " + producto["nombre"] + "\n"
+        "💵 *Monto:* " + producto["precio"] + "\n\n"
+        "📌 *Instrucciones para completar el pedido:*\n"
+        "1. Realiza tu transferencia a la cuenta CLABE indicada en Métodos de Pago.\n"
+        "2. Toca el botón de abajo para enviar tu comprobante al administrador.\n"
+        "3. El administrador validará el pago y te entregará tu acceso."
+    )
+
+    teclado = [
+        [
+            InlineKeyboardButton(
+                "💬 Enviar Comprobante al Admin",
+                url="tg://user?id=" + str(ADMIN_ID),
+            )
+        ],
+        [InlineKeyboardButton("🏠 Volver al menú principal", callback_data="inicio")],
+    ]
+
+    await query.message.edit_text(
+        texto_cliente,
+        reply_markup=InlineKeyboardMarkup(teclado),
+        parse_mode=ParseMode.MARKDOWN,
+    )
+
+    try:
+        alias = user.username if user.username else "Sin alias"
+        aviso_admin = (
+            "🚨 *NUEVO PEDIDO RECIBIDO*\n\n"
+            "👤 *Cliente:* " + str(user.full_name) + " (@" + alias + ")\n"
+            "🆔 *ID del Cliente:* `" + str(user.id) + "`\n"
+            "📦 *Producto:* " + producto["nombre"] + "\n"
+            "💰 *Total:* " + producto["precio"]
+        )
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=aviso_admin,
+            parse_mode=ParseMode.MARKDOWN,
+        )
+    except Exception:
+        pass
+
+
+async def info_pagos(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    texto = (
+        "💳 *FORMAS DE PAGO*\n\n"
+        "🏦 *Entidad / Banco:* STP\n"
+        "👤 *Titular:* YOLANDA ARREDONDO MICHEL\n"
+        "🔢 *Cuenta CLABE:* `646180402346077527`\n\n"
+        "📌 *Instrucciones:*\n"
+        "• Realiza tu transferencia por el monto exacto.\n"
+        "• Toca la CLABE para copiarla rápido.\n"
+        "• Envía tu comprobante para activar tu servicio."
+    )
+    teclado = [[InlineKeyboardButton("↩️ Volver", callback_data="inicio")]]
+    await query.message.edit_text(
+        texto, reply_markup=InlineKeyboardMarkup(teclado), parse_mode=ParseMode.MARKDOWN
+    )
+
+
+async def cerrar_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    await query.message.delete()
+
+
+async def handler_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    data = update.callback_query.data
+    if data == "inicio":
+        await start(update, context)
+    elif data.startswith("cat_"):
+        await mostrar_seccion(update, context, data.replace("cat_", ""))
+    elif data.startswith("pedir_"):
+        await procesar_pedido(update, context, data.replace("pedir_", ""))
+    elif data == "info_pagos":
+        await info_pagos(update, context)
+    elif data == "cerrar":
+        await cerrar_menu(update, context)
+
+
+async def handle_ping(request):
+    return web.Response(text="Bot is running!")
+
+
+async def run_web_server():
+    app = web.Application()
+    app.router.add_get("/", handle_ping)
+    port = int(os.environ.get("PORT", 8080))
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+
+
+async def main():
+    await run_web_server()
+
+    app = Application.builder().token(TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(handler_callback))
+
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling()
+
+    while True:
+        await asyncio.sleep(3600)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
