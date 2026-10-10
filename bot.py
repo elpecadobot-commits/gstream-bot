@@ -10,7 +10,7 @@ from telegram.ext import (
     ContextTypes,
 )
 
-TOKEN = "8731401630:AAE110CY2aumFtxoPhox50uMtO-ZaU99qU8"
+TOKEN = "8731401630:AAGwJrBrFzg0IyhpTVCvMMswmQCXB7td51Q"
 ADMIN_ID = 8431567592
 
 CATALOGO = {
